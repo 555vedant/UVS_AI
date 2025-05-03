@@ -1,7 +1,10 @@
 class Station:
     def __init__(self, id, location, charging_points):
         self.id = id
-        self.location = location  # e.g., "0-0" -> (0,0)
+        if isinstance(location, str):
+            self.location = tuple(map(float, location.split(',')))
+        else:
+            self.location = tuple(float(x) for x in location)
         self.charging_points = int(charging_points)
 
 class Task:

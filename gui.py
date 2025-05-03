@@ -5,8 +5,8 @@ from pam import pam_algorithm
 from reposition import reposition_vehicles
 from visualize import visualize_results
 import logging
+import re
 
-# Setup logging for debugging
 logging.basicConfig(level=logging.DEBUG)
 
 class UVSGui:
@@ -45,9 +45,10 @@ class UVSGui:
         
         ttk.Button(main_frame, text="Run Scheduler", command=self.run).grid(row=5, column=0, pady=10)
         ttk.Button(main_frame, text="Start Simulation", command=self.visualize).grid(row=5, column=1, pady=10, sticky=tk.W)
+        ttk.Button(main_frame, text="Reset Time", command=self.reset_time).grid(row=5, column=2, pady=10, sticky=tk.W)
         
         self.output = scrolledtext.ScrolledText(main_frame, width=60, height=20, font=("Arial", 10))
-        self.output.grid(row=6, column=0, columnspan=2, pady=10)
+        self.output.grid(row=6, column=0, columnspan=3, pady=10)
         
         self.stations = []
         self.vehicles = []
@@ -56,55 +57,58 @@ class UVSGui:
         self.repositioning = []
         self.current_time = 0
     
+    def reset_time(self):
+        self.current_time = 0
+        self.output.delete(1.0, tk.END)
+        self.output.insert(tk.END, "Time reset to 0 min\n")
+        logging.debug("Time reset to 0")
+    
     def validate_inputs(self):
         try:
-            # Log raw input
             raw_stations = self.stations_input.get()
             logging.debug(f"Raw stations input: '{raw_stations}'")
             
-            # Split and clean inputs
             stations = [s.strip() for s in raw_stations.split(",") if s.strip()]
             tasks = [t.strip() for t in self.tasks_input.get().split(",") if t.strip()]
-            vehicles = [v.strip() for v in self.vehicles_input.get().split(",") if v.strip()]
+            vehicles = [v.strip() for v in self.vehicles_input.get().split(",") if t.strip()]
             station_id = self.station_process.get().strip()
             algo = self.algo_choice.get().lower().strip()
             
             logging.debug(f"Parsed stations: {stations}")
             
-            # Validate stations (id-x-y-charging_points)
             for s in stations:
                 parts = s.split("-")
                 logging.debug(f"Station parts: {parts}")
                 if len(parts) != 4:
                     raise ValueError("Stations format: id-x-y-charging_points (e.g., M-0-0-5)")
                 id_part, x_part, y_part, charge_part = parts
+                if not re.match(r'^[a-zA-Z0-9]+$', id_part):
+                    raise ValueError("Stations: ID must be alphanumeric (e.g., M, B, Q)")
                 try:
-                    float(x_part)  # x
-                    float(y_part)  # y
-                    int(charge_part)  # charging_points
+                    float(x_part)
+                    float(y_part)
+                    int(charge_part)
                 except ValueError:
                     raise ValueError("Stations: x, y, charging_points must be numbers")
             
-            # Validate tasks
             if not all(len(t.split("-")) == 5 for t in tasks):
                 raise ValueError("Tasks format: origin-dest-fee-deadline-service_time")
             for t in tasks:
                 parts = t.split("-")
                 try:
-                    float(parts[2])  # fee
-                    float(parts[3])  # deadline
-                    float(parts[4])  # service_time
+                    float(parts[2])
+                    float(parts[3])
+                    float(parts[4])
                 except ValueError:
                     raise ValueError("Tasks: fee, deadline, service_time must be numbers")
             
-            # Validate vehicles
             if not all(len(v.split("-")) == 4 for v in vehicles):
                 raise ValueError("Vehicles format: id-station-electricity-capacity")
             for v in vehicles:
                 parts = v.split("-")
                 try:
-                    float(parts[2])  # electricity
-                    int(parts[3])   # capacity
+                    float(parts[2])
+                    int(parts[3])
                 except ValueError:
                     raise ValueError("Vehicles: electricity must be number, capacity must be integer")
             
@@ -121,7 +125,6 @@ class UVSGui:
         try:
             stations_str, tasks_str, vehicles_str, station_id, algo = self.validate_inputs()
             
-            # Parse stations as id-x-y-charging_points
             self.stations = [
                 Station(
                     id=s.split("-")[0],
@@ -136,8 +139,10 @@ class UVSGui:
             for t in self.tasks:
                 t.assigned = False
             
+            logging.debug(f"Running PAM at time {self.current_time}")
             self.assignments = pam_algorithm(self.tasks, self.vehicles, station_id, self.current_time)
             
+            logging.debug(f"Running repositioning with algo {algo}")
             self.repositioning = reposition_vehicles(self.stations, self.vehicles, self.tasks, self.assignments, algo)
             
             self.output.delete(1.0, tk.END)
@@ -157,9 +162,11 @@ class UVSGui:
             self.current_time += 5
         except Exception as e:
             messagebox.showerror("Error", str(e))
+            logging.error(f"Run error: {str(e)}")
     
     def visualize(self):
         try:
             visualize_results(self.stations, self.vehicles, self.tasks, self.assignments, self.repositioning)
         except Exception as e:
             messagebox.showerror("Error", f"Visualization failed: {str(e)}")
+            logging.error(f"Visualize error: {str(e)}")
