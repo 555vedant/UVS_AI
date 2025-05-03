@@ -3,6 +3,11 @@ __pycache__/
 *.pyc
 *.pyo
 
+# ignore models
+rar_actor.h5
+rar_critic.h5
+rdr_model.h5
+
 # Ignore virtual environment directories
 myenv/
 venv/
